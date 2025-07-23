@@ -1,0 +1,157 @@
+\documentclass[12pt]{article}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{longtable}
+\geometry{margin=1in}
+
+\title{\textbf{Proof of Taste Project Plan}}
+\author{Trey Wood}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Project Overview}
+\textbf{Goal}: Build a bourbon-tasting tracker and recommendation engine using:
+\begin{itemize}[itemsep=0.5em]
+\item GitHub for code management and version control
+\item Streamlit Cloud for a public-facing web app
+\item AWS (S3, Lambda, Athena) for data storage and cloud orchestration
+\end{itemize}
+
+\vspace{1em}
+\textbf{App Features}:
+\begin{itemize}[itemsep=0.5em]
+\item User selects or inputs a Subject ID
+\item Users submit bourbon tasting notes via a Streamlit app
+\item Notes are stored in AWS S3, and optionally analyzed with NLP
+\item A recommender suggests bourbons based on taste profiles
+\item Athena provides SQL-based analytics (optional)
+\end{itemize}
+
+\section*{Architecture Overview}
+\begin{verbatim}
++-----------------------------+
+| User visits app |
+| (proof-of-taste.app) |
++--------------+--------------+
+|
+v
++--------------------+
+| Streamlit Cloud |
+| (from GitHub) |
++--------------------+
+| |
+| v
+| Tasting Note Form
+| |
+| v
+| +--------------------------+
+| | API call to AWS Lambda |
+| | via API Gateway (REST) |
+| +------------+------------+
+| |
+| v
+| +-----------------------------+
+| | Lambda Function |
+| | - Saves data to S3 |
+| | - Triggers NLP if needed |
+| +-----------------------------+
+| |
+| +---------+-------+
+| | |
+v v v
+S3 (logs) Athena (queries)
+\end{verbatim}
+
+\section*{Phased Work Plan}
+
+\subsection*{Phase 1: GitHub + Local Streamlit MVP (Week 1)}
+\textbf{Goal}: Basic local app with Subject ID and tasting form.
+\begin{itemize}
+\item Create GitHub repo: \texttt{proof-of-taste}
+\item Set up Streamlit locally
+\item Build form UI for submitting and viewing notes
+\item Save data to local JSON files (e.g. \verb|data/{subject_id}.json|)
+\end{itemize}
+
+\subsection*{Phase 2: Streamlit Cloud Hosting (Week 2)}
+\textbf{Goal}: Deploy public-facing app
+\begin{itemize}
+\item Push code to GitHub
+\item Create \texttt{requirements.txt}, \texttt{secrets.toml}
+\item Deploy via \href{https://streamlit.io/cloud}{Streamlit Cloud}
+\end{itemize}
+
+\subsection*{Phase 3: AWS S3 Integration (Week 3)}
+\textbf{Goal}: Move tasting logs to cloud storage
+\begin{itemize}
+\item Set up S3 bucket (\texttt{proof-of-taste-data})
+\item Use \texttt{boto3} to save/load JSON logs
+\item Secure access using IAM roles and keys
+\end{itemize}
+
+\subsection*{Phase 4: AWS Lambda API (Week 4)}
+\textbf{Goal}: Add REST API via Lambda + API Gateway
+\begin{itemize}
+\item Build ingestion Lambda function
+\item Connect via API Gateway
+\item Update Streamlit to POST form data to API
+\end{itemize}
+
+\subsection*{Phase 5: NLP + Recommendations (Week 5--6)}
+\textbf{Goal}: Add flavor NLP and suggestion engine
+\begin{itemize}
+\item Use spaCy to extract flavors from notes
+\item Track preferences per Subject ID
+\item Recommend bourbons from curated dataset
+\end{itemize}
+
+\subsection*{Phase 6: Athena Query Layer (Optional)}
+\textbf{Goal}: Enable analytics and ad hoc queries
+\begin{itemize}
+\item Enable Athena over S3 logs
+\item Create SQL tables/views
+\item Expose insights via Streamlit dashboard
+\end{itemize}
+
+\section*{Repository Structure}
+\begin{verbatim}
+proof-of-taste/
+|- app.py # Streamlit UI
+|- requirements.txt
+|- utils/
+| |- s3_utils.py # AWS S3 helper
+| |- nlp_utils.py # Flavor extraction
+| |- recommender.py # Matching logic
+|- data/
+| |- bourbon_db.csv # Bourbon metadata
+|- .streamlit/
+|- secrets.toml # AWS keys (not committed)
+\end{verbatim}
+
+\section*{Tool Summary}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Layer} & \textbf{Tool} & \textbf{Purpose} \\
+\hline
+UI & Streamlit & Front-end app (deployed to Streamlit Cloud) \\
+Code Repo & GitHub & Version control and CI/CD trigger \\
+Storage & AWS S3 & Log storage and raw data \\
+Compute & AWS Lambda & Ingestion and analysis endpoint \\
+SQL Query & AWS Athena & Optional analytics \\
+Auth & Subject ID input & Light ID management (expandable) \\
+\hline
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+\noindent\textit{Prepared for personal project development and AWS portfolio demonstration.}
+
+\end{document}
+
