@@ -1,60 +1,81 @@
 import hashlib
 import streamlit as st
-import json
-from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 from supabase_client import supabase
 
-# Title info
+# ---------------------- Title ----------------------
 st.title("Proof of Taste")
 st.subheader("Your Bourbon Tasting Log")
 
-# Subject ID
-subject_id = st.text_input("Enter your Subject ID")
 
-# Make review ID as a SHA256 hash
+# ---------------------- Utility Functions ----------------------
+
 def make_review_id(entry):
-    # Create a string from the key fields
+    """Creates a unique review_id based on tasting fields."""
     concat_str = (
-            entry["date"] +
-            entry["distillery"].strip().lower() +
-            entry["bourbon_name"].strip().lower() +
-            str(entry["proof"]) +
-            entry["notes"].strip().lower()
+        entry["date"] +
+        entry["distillery"].strip().lower() +
+        entry["bourbon_name"].strip().lower() +
+        str(entry["proof"]) +
+        entry["notes"].strip().lower()
     )
-    # hash it
     return hashlib.sha256(concat_str.encode("utf-8")).hexdigest()
 
-# Save to Supabase
-def save_to_supabase(subject_id, new_entry):
-    # First, ensure subject exists. If not, it violates foreign key constraint
-    existing_subject = supabase.table("subjects").select("subject_id").eq("subject_id", subject_id).execute()
-    if not existing_subject.data:
-        supabase.table("subjects").insert({"subject_id": subject_id}).execute()
 
-    # Add review_id and subject_id
+def user_exists(subject_id):
+    """Checks if a user exists in the 'subjects' table."""
+    response = supabase.table("subjects").select("subject_id").eq("subject_id", subject_id).execute()
+    return bool(response.data)
+
+
+def create_user(subject_id):
+    """Creates a new user with a created_at timestamp."""
+    supabase.table("subjects").insert({
+        "subject_id": subject_id,
+        "created_at": datetime.now(UTC).isoformat()
+    }).execute()
+
+
+def save_to_supabase(subject_id, new_entry):
+    """Saves or updates a tasting entry in Supabase."""
     new_entry["review_id"] = make_review_id(new_entry)
     new_entry["subject_id"] = subject_id
 
-    # Check if entry already exists
-    existing = supabase.table("tastings").select('review_id').eq('review_id', new_entry["review_id"]).execute()
+    existing = supabase.table("tastings").select("review_id").eq("review_id", new_entry["review_id"]).execute()
+
     if existing.data:
-        # Update existing
         supabase.table("tastings").update(new_entry).eq("review_id", new_entry["review_id"]).execute()
-        is_new = False
+        return False  # not new
     else:
-        # Insert new
         supabase.table("tastings").insert(new_entry).execute()
-        is_new = True
-
-    return is_new
+        return True  # new entry
 
 
-# If subject found
+# ---------------------- Login ----------------------
+
+subject_id = None
+subject_id_input = st.text_input("Enter your username (case-insensitive)")
+
+if subject_id_input:
+    normalized_id = subject_id_input.strip().lower()
+    if user_exists(normalized_id):
+        subject_id = normalized_id
+        st.success(f"Welcome back, **{subject_id}**!")
+    else:
+        confirm = st.checkbox("Create new account with this username?")
+        if confirm:
+            create_user(normalized_id)
+            subject_id = normalized_id
+            st.success(f"Account created. Welcome, **{subject_id}**!")
+        else:
+            st.info("Username not found. Check spelling or confirm to create new account.")
+
+
+# ---------------------- Tasting Form ----------------------
+
 if subject_id:
-    st.success(f"Welcome, {subject_id}!")
+    st.header("Log a New Tasting")
 
-    # Start form
     with st.form(key="tasting_form"):
         date = st.date_input("Date of Tasting", datetime.today())
         distillery = st.text_input("Distillery")
@@ -64,14 +85,12 @@ if subject_id:
         submitted = st.form_submit_button("Submit")
 
         if submitted:
-
-            # Validate fields
             if not distillery.strip():
                 st.error("Please enter the distillery")
             elif not bourbon_name.strip():
                 st.error("Please enter the bourbon name")
             elif not notes.strip():
-                st.error("Please enter the notes")
+                st.error("Please enter tasting notes")
             else:
                 entry = {
                     "date": date.isoformat(),
@@ -80,18 +99,32 @@ if subject_id:
                     "proof": proof,
                     "notes": notes
                 }
+
                 is_new = save_to_supabase(subject_id, entry)
+
                 if is_new:
                     st.success("Thank you for submitting!")
                 else:
-                    st.warning("This review already exists.")
+                    st.warning("This review already exists and has been updated.")
 
-    # Display previous, if there
-    entries = supabase.table("tastings").select("*").eq("subject_id", subject_id).order("date",
-                                                                                        desc=True).execute().data
+
+# ---------------------- Show Past Tastings ----------------------
+
+    entries = (
+        supabase.table("tastings")
+        .select("*")
+        .eq("subject_id", subject_id)
+        .order("date", desc=True)
+        .execute()
+        .data
+    )
+
     if entries:
-        st.header("Your Bourbon Tasting Log")
+        st.header(f"{subject_id}'s Bourbon Tasting Log")
         for i, e in enumerate(entries, 1):
-            st.write(f"**{i}. {e['date']} - {e['bourbon_name']}**")
-            st.write(e["notes"])
+            st.markdown(f"**{i}. {e['date']} - {e['bourbon_name']}**")
+            st.write(f"_Distillery:_ {e['distillery']}")
+            st.write(f"_Bourbon Name:_ {e['bourbon_name']}")
+            st.write(f"_Proof:_ {e['proof']}")
+            st.write(f"_Notes:_ {e["notes"]}")
             st.write("---")
