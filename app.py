@@ -12,9 +12,6 @@ st.subheader("Your Bourbon Tasting Log")
 # Subject ID
 subject_id = st.text_input("Enter your Subject ID")
 
-# Get supabase secrets
-st.secrets["SUPABASE_URL"]
-
 # Make review ID as a SHA256 hash
 def make_review_id(entry):
     # Create a string from the key fields
