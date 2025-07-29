@@ -1,9 +1,9 @@
 import hashlib
-
 import streamlit as st
 import json
 from pathlib import Path
 from datetime import datetime
+from supabase_client import supabase
 
 # Title info
 st.title("Proof of Taste")
@@ -11,6 +11,9 @@ st.subheader("Your Bourbon Tasting Log")
 
 # Subject ID
 subject_id = st.text_input("Enter your Subject ID")
+
+# Get supabase secrets
+st.secrets["SUPABASE_URL"]
 
 # Make review ID as a SHA256 hash
 def make_review_id(entry):
@@ -25,38 +28,30 @@ def make_review_id(entry):
     # hash it
     return hashlib.sha256(concat_str.encode("utf-8")).hexdigest()
 
-# Save JSON function
-def save_json(subject_id, new_entry):
+# Save to Supabase
+def save_to_supabase(subject_id, new_entry):
+    # First, ensure subject exists. If not, it violates foreign key constraint
+    existing_subject = supabase.table("subjects").select("subject_id").eq("subject_id", subject_id).execute()
+    if not existing_subject.data:
+        supabase.table("subjects").insert({"subject_id": subject_id}).execute()
 
-    # Make path
-    filepath = Path("data") / f"{subject_id}.json"
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-
-    # Add review_id to new_entry
+    # Add review_id and subject_id
     new_entry["review_id"] = make_review_id(new_entry)
+    new_entry["subject_id"] = subject_id
 
-    # If exists, load
-    if filepath.exists():
-        with open(filepath, "r") as f:
-            data = json.load(f)
-    else:
-        data = []
-
-    # Check if review_id exists
-    existing_ids = [r.get("review_id") for r in data if "review_id" in r]
-    if new_entry["review_id"] in existing_ids:
-        # Update existing review
-        data = [new_entry if r['review_id'] == new_entry['review_id'] else r for r in data]
+    # Check if entry already exists
+    existing = supabase.table("tastings").select('review_id').eq('review_id', new_entry["review_id"]).execute()
+    if existing.data:
+        # Update existing
+        supabase.table("tastings").update(new_entry).eq("review_id", new_entry["review_id"]).execute()
         is_new = False
     else:
-        # Append
-        data.append(new_entry)
+        # Insert new
+        supabase.table("tastings").insert(new_entry).execute()
         is_new = True
 
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2)
-
     return is_new
+
 
 # If subject found
 if subject_id:
@@ -88,19 +83,18 @@ if subject_id:
                     "proof": proof,
                     "notes": notes
                 }
-                is_new = save_json(subject_id, entry)
+                is_new = save_to_supabase(subject_id, entry)
                 if is_new:
                     st.success("Thank you for submitting!")
                 else:
                     st.warning("This review already exists.")
 
     # Display previous, if there
-    filepath = Path("data") / f"{subject_id}.json"
-    if filepath.exists():
+    entries = supabase.table("tastings").select("*").eq("subject_id", subject_id).order("date",
+                                                                                        desc=True).execute().data
+    if entries:
         st.header("Your Bourbon Tasting Log")
-        with open(filepath, "r") as f:
-            past_entries = json.load(f)
-        for i, e in enumerate(past_entries[::-1], 1):
+        for i, e in enumerate(entries, 1):
             st.write(f"**{i}. {e['date']} - {e['bourbon_name']}**")
             st.write(e["notes"])
             st.write("---")
