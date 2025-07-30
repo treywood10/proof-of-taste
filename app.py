@@ -2,6 +2,7 @@ import hashlib
 import streamlit as st
 from datetime import datetime, UTC
 from supabase_client import supabase
+from postgrest.exceptions import APIError
 
 # ---------------------- Constants ----------------------
 CURATOR_ID = "curator"
@@ -50,23 +51,45 @@ def save_to_supabase(subject_id, new_entry):
         return True  # new entry
 
 
-from postgrest.exceptions import APIError
+def make_curated_id(entry):
+    """Creates a unique ID for curated review using bourbon, notes, and source URL."""
+    concat_str = (
+        entry["bourbon_name"].strip().lower() +
+        entry["distillery"].strip().lower() +
+        str(entry["proof"]) +
+        entry["review_text"].strip().lower() +
+        entry["url"].strip().lower()
+    )
+    return hashlib.sha256(concat_str.encode("utf-8")).hexdigest()
+
 
 def save_curated_review(entry):
     try:
+        entry["curated_id"] = make_curated_id(entry)
+
+        # Check if this curated review already exists
+        existing = (
+            supabase.table("curated_reviews")
+            .select("curated_id")
+            .eq("curated_id", entry["curated_id"])
+            .execute()
+        )
+
+        if existing.data:
+            print("Curated review already exists.")
+            return False
+
         result = supabase.table("curated_reviews").insert(entry).execute()
-        # Optional: log the result data
         print("Insert success:", result.data)
         return True
+
     except APIError as e:
-        # Supabase/PostgREST-specific errors
         print("Supabase API error:", e.message)
         print("Error code:", e.code)
         print("Details:", e.details)
         print("Hint:", e.hint)
         return False
     except Exception as e:
-        # Other general exceptions (e.g., connection errors)
         print("Unexpected error:", str(e))
         return False
 
@@ -114,6 +137,7 @@ if curator_mode:
         distillery = st.text_input("Distillery")
         proof = st.number_input("Proof (0 - 200)", min_value=0.0, max_value=200.0, step=0.1)
         review_text = st.text_area("Review Notes")
+        url = st.text_input("URL of the review (optional)")
         submitted = st.form_submit_button("Submit Curated Review")
 
         if submitted:
@@ -123,17 +147,21 @@ if curator_mode:
                 st.error("Please enter the distillery")
             elif not review_text.strip():
                 st.error("Please enter the review notes")
+            elif not url.strip():
+                st.error("Please include the source URL for tracking purposes")
             else:
                 curated_entry = {
                     "bourbon_name": bourbon_name,
                     "distillery": distillery,
                     "proof": proof,
-                    "review_text": review_text
+                    "review_text": review_text,
+                    "url": url
                 }
                 if save_curated_review(curated_entry):
                     st.success("Curated review added!")
                 else:
-                    st.error("Error adding curated review.")
+                    st.warning("This curated review already exists.")
+
 
 # ---------------------- Regular User Mode ----------------------
 
