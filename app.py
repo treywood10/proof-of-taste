@@ -143,8 +143,8 @@ if curator_mode:
         })
 
     with st.form(key="curated_form"):
-        bourbon_name = st.text_input("Bourbon Name", key="curator_bourbon_name")
         distillery = st.text_input("Distillery", key="curator_distillery")
+        bourbon_name = st.text_input("Bourbon Name", key="curator_bourbon_name")
         proof = st.number_input("Proof (0 - 200)", min_value=0.0, max_value=200.0, step=0.1, key="curator_proof")
         single_barrel = st.checkbox("Is this a single barrel release?", key="curator_single_barrel")
         review_text = st.text_area("Review Notes", key="curator_review_text")
