@@ -14,7 +14,7 @@ As someone who grew up in Tennessee with limited exposure to bourbon outside of 
 
 The app is built in Python using Streamlit to provide an interactive and user-friendly interface. User data and tasting notes are stored in a Supabase database. I am actively collecting tasting notes from various distillery websites and bourbon review sources to create a robust dataset. This dataset will be used to train and deploy a recommendation model that suggests bourbons tailored to each user's taste.
 
-## Future Plans
+## Future Work
 
 - User authentication and profile management through SupaBase
 - Enhanced recommendation algorithms leveraging collaborative filtering and natural language processing  
